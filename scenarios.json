@@ -26,8 +26,7 @@
 	"simulations": [{
 		"scenarios": [
 			"MultiNavBookStore",
-	                "QuickNavBookStore",
-			"QuickNavBookStore"
+	                "QuickNavBookStore"
 	             ],
 		"params": {
 			"failureBehavior": "Fail",
