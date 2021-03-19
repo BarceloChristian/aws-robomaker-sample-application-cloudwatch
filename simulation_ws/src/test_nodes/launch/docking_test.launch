@@ -1,0 +1,31 @@
+<launch>
+    <arg name="use_sim_time" default="true"/>
+    <param name="use_sim_time" value="$(arg use_sim_time)"/>
+    <!-- Enable or disable listening to a boolean topic for the test. If a "true" message is published,
+        the test will succeed. [DEFAULT]: True -->
+    <param name="enable_is_docked_topic" type="bool" value="$(optenv ENABLE_IS_DOCKED_TOPIC true)" />
+    <!-- Name of the boolean topic name from which the test listens for docking completion
+        [DEFAULT]: "/is_docked"-->
+    <param name="docked_topic_name" type="str" value="$(optenv DOCKED_TOPIC_NAME /docked)" />
+    <!-- Enable or disable listening to odometry for the test. If enabled, the test will calculate the
+        distance from the robot to the docking station. If it is close (given a certain threshold), the
+        test will succeed. [DEFAULT]: False -->
+    <param name="enable_odom_topic" type="bool" value="$(optenv ENABLE_ODOM_TOPIC false)" />
+    <!-- Name of the odometry topic name from which the test calculates the distance to the dock.
+        [DEFAULT]: "/odom"-->
+    <param name="odom_topic_name" type="str" value="$(optenv ODOM_TOPIC_NAME /odom)" />
+    <!-- Threshold for the odometry docking testing in cm. If robot pose is within threshold of the dock
+        pose, the test will pass. [DEFAULT]: 0.05 -->
+    <param name="dock_threshold_m" type="double" value="$(optenv DOCK_THRESHOLD_M 0.05)" />
+    <!-- Dock position. [DEFAULT]: x=0, y=0 -->
+    <param name="dock_x" type="double" value="$(optenv DOCK_X 0)" />
+    <param name="dock_y" type="double" value="$(optenv DOCK_Y 0)" />
+    <!-- Time until simulation cancels. [DEFAULT]: 500 -->
+    <param name="sim_timeout_sec" type="int" value="$(optenv SIM_TIMEOUT_SEC 500)" />
+    <!-- Time until docking process starts and test fails due to timeout. Must be smaller than
+        simulation time. [DEFAULT]: 100 -->
+    <param name="dock_timeout_sec" type="int" value="$(optenv DOCK_TIMEOUT_SEC 100)" />
+    <!-- Time in seconds the robot will move before going to dock. [DEFAULT]: 20 -->
+    <param name="wait_time_before_docking" type="int" value="$(optenv WAIT_TIME_BEFORE_DOCKING 20)" />
+    <node pkg="test_nodes" type="docking_test.py" name="docking_test" output="screen"/>
+</launch>

@@ -9,10 +9,10 @@
   -->
 
   <!-- If true, will follow a pre-defined route forever [DEFAULT] -->
-  <arg name="follow_route" default="true"/>
+  <arg name="follow_route" default="false"/>
 
   <!-- If true and "follow_route" is false, will follow a dynamic route forever -->
-  <arg name="dynamic_route" default="false"/>
+  <arg name="dynamic_route" default="true"/>
 
   <!--
        Always set GUI to false for AWS RoboMaker Simulation
