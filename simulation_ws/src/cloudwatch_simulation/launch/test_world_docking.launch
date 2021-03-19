@@ -1,0 +1,12 @@
+<launch>
+
+  <param name="dock_x" type="double" value="$(optenv DOCK_X 0)" />
+  <param name="dock_y" type="double" value="$(optenv DOCK_Y 0)" />
+  <param name="~mode"  type="str" value="dynamic"/>
+
+  <!-- Spawn simulation world based on environment variable, SIMULATION_WORLD.-->
+  <include file="$(find cloudwatch_simulation)/launch/$(optenv SIMULATION_WORLD bookstore)_turtlebot_navigation.launch">
+    <arg name="gui" value="true"/>
+  </include>
+
+</launch>
