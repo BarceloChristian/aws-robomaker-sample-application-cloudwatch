@@ -1,0 +1,32 @@
+<launch>
+    <arg name="use_sim_time" default="true"/>
+    <param name="use_sim_time" value="$(arg use_sim_time)"/>
+
+    <!-- Enables/Disables listening to /docked topic. This can be used instead of reading to odom topic. -->
+    <param name="use_docked_topic" type="bool" value="$(optenv USE_DOCKED_TOPIC False)" />
+    <!-- Enables/Disables listening to /odom topic to check if the robot arrives to dock position.
+         Dock position and thresholds must be correctly set for the test to work properly.
+         It will be ignored if use_docked_topic is True -->
+    <param name="use_odom_topic" type="bool" value="$(optenv USE_ODOM_TOPIC True)" />
+
+    <!-- Thresholds for the odometry based docking testing (m, deg).
+         'dock_rotational_threshold' = 0 means not using rotational threshold
+         If robot pose is within thresholds from dock pose, the test will succeed. -->
+    <param name="dock_threshold" type="double" value="$(optenv DOCK_THRESHOLD 0.05)" />
+    <param name="dock_rotational_threshold" type="double" value="$(optenv DOCK_ROT_THRESHOLD 0.)" />
+    <!-- Dock position (X, Y, YAW) -->
+    <param name="dock_x" type="double" value="$(optenv DOCK_X 0.)" />
+    <param name="dock_y" type="double" value="$(optenv DOCK_Y 0.)" />
+    <param name="dock_yaw" type="double" value="$(optenv DOCK_YAW 0.)" />
+
+    <!-- Time until simulation timeouts (s) -->
+    <param name="sim_timeout" type="int" value="$(optenv SIM_TIMEOUT_SECONDS 500)" />
+    <!--  Time until docking process starts (s) -->
+    <param name="wait_before_docking" type="int" value="$(optenv WAIT_BEFORE_DOCKING_SECONDS 5)" />
+    <!-- Time until the simulation timeouts after having started the docking process (s) -->
+    <param name="docking_timeout" type="int" value="$(optenv DOCKING_TIMEOUT_SECONDS 100)" />
+
+    <node pkg="test_nodes" type="docking_test.py" name="docking_test" output="screen">
+        <remap from="/is_docked" to="/docked" />
+    </node>
+</launch>

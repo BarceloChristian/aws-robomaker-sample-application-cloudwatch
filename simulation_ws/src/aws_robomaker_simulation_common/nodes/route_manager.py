@@ -25,6 +25,10 @@ from nav_msgs.msg import MapMetaData, OccupancyGrid, Path
 import rospy
 import tf.transformations as transform
 
+from std_srvs.srv import Trigger, TriggerResponse
+from std_msgs.msg import Bool
+from actionlib_msgs.msg import GoalStatus
+
 
 class GoalGenerator():
     """
@@ -274,6 +278,15 @@ class RouteManager():
         self.client = actionlib.SimpleActionClient('move_base', MoveBaseAction)
         self.client.wait_for_server()
 
+        self.is_docking = False
+        self.dock_x = rospy.get_param("dock_x")
+        self.dock_y = rospy.get_param("dock_y")
+        self.trigger_docking_server = rospy.Service(
+            'trigger_docking_service', Trigger, self.trigger_docking_cb)
+        self.pub = rospy.Publisher(
+            "/docked", Bool, queue_size=10, latch=True)
+        self.pub.publish(Bool(False))
+
         self.route_mode = rospy.get_param('~mode')
         if self.route_mode not in RouteManager.route_modes:
             rospy.logerr(
@@ -291,6 +304,43 @@ class RouteManager():
 
         self.bad_goal_counter = 0
 
+    def trigger_docking_cb(self, _):
+        message = ""
+        if self.is_docking:
+            self.is_docking = False
+            self.pub.publish(Bool(False))
+            message = "Stopped docking. Back to route forever."
+        else:
+            yaw = 90
+            quaternion_orientation = transform.quaternion_from_euler(0., 0., yaw)
+            pose = {
+                'pose':
+                {
+                    'position': {
+                        'x': self.dock_x,
+                        'y': self.dock_y
+                    },
+                    'orientation': {
+                        'x': quaternion_orientation[0],
+                        'y': quaternion_orientation[1],
+                        'z': quaternion_orientation[2],
+                        'w': quaternion_orientation[3]
+                    }
+                }
+            }
+            goal = self.to_move_goal(pose)
+            self.is_docking = True
+            self.client.send_goal(goal, done_cb=self.publish_docked_cb)
+            message = "Docking service called"
+        return TriggerResponse(
+            success=True,
+            message=message
+        )
+
+    def publish_docked_cb(self, status, result):
+        if status == GoalStatus.SUCCEEDED:
+            self.pub.publish(Bool(True))
+
     def to_move_goal(self, pose):
         if pose is None:
             raise ValueError('Goal position cannot be NULL')
@@ -306,13 +356,15 @@ class RouteManager():
     def route_forever(self):
         rate = rospy.Rate(1)
         while not rospy.is_shutdown():
-            if self.bad_goal_counter > 10:
+            if self.is_docking:
+                rate.sleep()
+            elif self.bad_goal_counter > 10:
                 rospy.loginfo(
                     'Stopping route manager due to too many bad goals.\
                     Check that your occupancy map has Trinary value\
                     representation and is not\
                     visually noisy/incorrect'
-                    )
+                )
                 return
             else:
                 rospy.loginfo(
@@ -342,7 +394,7 @@ class RouteManager():
                         '/move_base/DWAPlannerROS/global_plan',
                         Path,
                         timeout=5
-                        )
+                    )
 
                     if not self.client.wait_for_result():
                         rospy.logerr(
@@ -359,7 +411,7 @@ class RouteManager():
 
 
 def main():
-    rospy.init_node('route_manager')
+    rospy.init_node('route_manager', log_level=rospy.INFO)
     try:
         route_manger = RouteManager()
         route_manger.route_forever()
