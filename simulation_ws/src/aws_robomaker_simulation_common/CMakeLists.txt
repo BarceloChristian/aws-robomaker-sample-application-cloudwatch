@@ -15,6 +15,7 @@ install(DIRECTORY worlds
 
 catkin_install_python(PROGRAMS 
   nodes/route_manager.py
+  nodes/route_manager_coverage.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
