@@ -25,8 +25,6 @@ from nav_msgs.msg import MapMetaData, OccupancyGrid, Path
 import rospy
 import tf.transformations as transform
 
-from std_srvs.srv import Trigger, TriggerResponse
-from std_msgs.msg import Bool
 from actionlib_msgs.msg import GoalStatus
 
 

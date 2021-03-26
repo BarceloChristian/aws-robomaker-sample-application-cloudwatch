@@ -12,5 +12,9 @@
     <!-- Time until coverage test timeout (s). Greater than simulation time. -->
     <param name="coverage_timeout" type="int" value="$(optenv COVERAGE_TIMEOUT 500)" />
 
+    <param name="map_topic" type="str" value="$(optenv MAP_TOPIC /map)" />
+
+    <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
+
     <node pkg="test_nodes" type="coverage_test.py" name="coverage_test" output="screen"/>
 </launch>

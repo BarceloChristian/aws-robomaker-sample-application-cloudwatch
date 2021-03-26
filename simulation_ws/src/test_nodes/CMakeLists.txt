@@ -45,6 +45,7 @@ catkin_package(
 ################################################################################
 catkin_install_python(PROGRAMS
   nodes/navigation_test.py
+  nodes/coverage_test.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
