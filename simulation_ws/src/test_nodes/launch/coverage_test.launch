@@ -14,9 +14,11 @@
 
     <param name="map_topic" type="str" value="$(optenv MAP_TOPIC /map)" />
 
+    <!-- Odometry topic from where the test listens to the robot position. -->
     <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
 
-    <param name="footprint_topic" type="str" value="$(optenv FOOTPRINT_TOPIC /move_base/global_costmap/footprint)" />
+    <!-- Robot footprint. -->
+    <rosparam file="$(find test_nodes)/robot_footprint/footprint.yaml" command="load" />
 
     <node pkg="test_nodes" type="coverage_test.py" name="coverage_test" output="screen"/>
 </launch>
