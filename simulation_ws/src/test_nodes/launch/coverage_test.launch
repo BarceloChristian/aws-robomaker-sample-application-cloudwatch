@@ -16,5 +16,7 @@
 
     <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
 
+    <param name="footprint_topic" type="str" value="$(optenv FOOTPRINT_TOPIC /move_base/global_costmap/footprint)" />
+
     <node pkg="test_nodes" type="coverage_test.py" name="coverage_test" output="screen"/>
 </launch>

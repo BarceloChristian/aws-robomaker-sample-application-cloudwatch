@@ -71,26 +71,48 @@ class CoverageTest(unittest.TestCase):
 
 
     def odom_cb(self, msg):
-        pose_in_odom = self.odometry_to_pose_stamped(msg)
+        if not self.is_cancelled:
+            map_array_index = self.odom_to_map_array(msg)
 
-        # Getting an extrapolation error, even when asking if it canTransform
-        if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time(0)):
-            pose_in_map = self.tl.transformPose(self.map_topic, pose_in_odom)
+            if self.map_array[map_array_index[0]][map_array_index[1]] != self.COVERED_PGM_VALUE:
+                self.painting_map[map_array_index[0]][map_array_index[1]] = self.COVERED_PGM_VALUE
 
-            map_pos_in_array_x = floor((pose_in_map.pose.position.x / self.resolution) + self.map_origin_x)
-            map_pos_in_array_y = floor((pose_in_map.pose.position.y / self.resolution) + self.map_origin_y)
-            norm_map_pos_in_array_x = int(round(map_pos_in_array_x + self.map_height/2))
-            norm_map_pos_in_array_y = int(round(map_pos_in_array_y + self.map_width/2))
-
-            if self.map_array[norm_map_pos_in_array_x][norm_map_pos_in_array_y] != self.COVERED_PGM_VALUE:
-                self.painting_map[norm_map_pos_in_array_x][norm_map_pos_in_array_y] = self.COVERED_PGM_VALUE
-
-            rospy.loginfo ("Original free spaces -> %s", self.map_free_spaces)
-            rospy.loginfo ("Current free spaces -> %s", np.count_nonzero(self.painting_map == self.FREE_PGM_VALUE))
+            rospy.loginfo ("Original free spaces -> %s", self.map_free_spaces)##########
+            rospy.loginfo ("Current free spaces -> %s", np.count_nonzero(self.painting_map == self.FREE_PGM_VALUE))#########
             current_percentage_covered = float((np.count_nonzero(self.painting_map == self.FREE_PGM_VALUE) / self.map_free_spaces ) * 100)
-            rospy.loginfo(current_percentage_covered)
+            rospy.loginfo(current_percentage_covered)#########
+
+            if current_percentage_covered >= self.coverage_threshold:
+                rospy.loginfo("%s passed", self.test_name)
+                self.set_tag(
+                    name=self.test_name + "_Status", value="Passed")
+                self.cancel_job()
+
+    def odom_to_map_array(self, position):
+        """
+        Converts an Odometry message in odom frame to map frame and returns the [x,y] indexes of its
+        position in the map array.
+        """
+        # Getting an extrapolation error, even when asking if it canTransform
+        if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time(0)) and not self.is_cancelled:
+            point_in_odom = self.odometry_to_pose_stamped(position)
+            point_in_map = self.tl.transformPose(self.map_topic, point_in_odom)
+            return self.point_to_map_array(point_in_map)
+
+    def point_to_map_array(self, point):
+        """
+        Given a point in map frame it returns the [x,y] indexes of it in the map array.
+        """
+        map_pos_in_array_x = floor((point.pose.position.x / self.resolution) + self.map_origin_x)
+        map_pos_in_array_y = floor((point.pose.position.y / self.resolution) + self.map_origin_y)
+        norm_map_pos_in_array_x = int(round(map_pos_in_array_x + self.map_height/2))
+        norm_map_pos_in_array_y = int(round(map_pos_in_array_y + self.map_width/2))
+        return [norm_map_pos_in_array_x, norm_map_pos_in_array_y]
 
     def odometry_to_pose_stamped(self, msg):
+        """
+        Creates a PoseStamped message from an Odometry message.
+        """
         pose_in_odom = PoseStamped()
         pose_in_odom.header = msg.header
         pose_in_odom.pose = msg.pose.pose
@@ -100,17 +122,21 @@ class CoverageTest(unittest.TestCase):
         """
         Save the raw map and convert it to a numpy array. Saves useful data.
         """
-        self.raw_map = rospy.wait_for_message(self.map_topic, OccupancyGrid, timeout=5)
-        self.map_array = np.array(self.raw_map.data)
+        try:
+            self.raw_map = rospy.wait_for_message(self.map_topic, OccupancyGrid, timeout=5)
+            self.map_array = np.array(self.raw_map.data)
+            self.map_array = np.reshape(self.map_array, (self.raw_map.info.height, self.raw_map.info.width))
 
-        self.map_height = self.raw_map.info.height
-        self.map_width = self.raw_map.info.width
-        self.resolution = self.raw_map.info.resolution
-        self.map_origin_x = self.raw_map.info.origin.position.x
-        self.map_origin_y = self.raw_map.info.origin.position.y
-        self.map_free_spaces = np.count_nonzero(self.map_array == self.FREE_PGM_VALUE)
-
-        self.map_array = np.reshape(self.map_array, (self.map_height, self.map_width))
+            self.map_height = self.raw_map.info.height
+            self.map_width = self.raw_map.info.width
+            self.resolution = self.raw_map.info.resolution
+            self.map_origin_x = self.raw_map.info.origin.position.x
+            self.map_origin_y = self.raw_map.info.origin.position.y
+            self.map_free_spaces = np.count_nonzero(self.map_array == self.FREE_PGM_VALUE)
+        except Exception as e:
+            rospy.logerr("Error %s", e)
+            self.set_tag(name=self.test_name, value="Failed")
+            self.cancel_job()
 
     def timeout_cb(self, msg):
         """
@@ -134,7 +160,7 @@ class CoverageTest(unittest.TestCase):
         """
         Cancels current simulation job using AWS RoboMaker service
         """
-        rospy.loginfo("Canceling job")
+        rospy.loginfo("Canceling job ->")
         self.is_cancelled = True
         return
         rospy.wait_for_service("/robomaker/job/cancel")
