@@ -95,16 +95,17 @@ class CoverageTest(unittest.TestCase):
         """
         # Getting an extrapolation error, even when asking if it canTransform
         if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time(0)) and not self.is_cancelled:
-            point_in_odom = self.odometry_to_pose_stamped(position)
-            point_in_map = self.tl.transformPose(self.map_topic, point_in_odom)
-            return self.point_to_map_array(point_in_map)
+            point_in_odom_frame = self.odometry_to_pose_stamped(position)
+            point_in_map_frame = self.tl.transformPose(self.map_topic, point_in_odom_frame)
+            return self.point_to_map_array(point_in_map_frame.pose.position.x,
+                                           point_in_map_frame.pose.position.y)
 
-    def point_to_map_array(self, point):
+    def point_to_map_array(self, point_x, point_y):
         """
         Given a point in map frame it returns the [x,y] indexes of it in the map array.
         """
-        map_pos_in_array_x = floor((point.pose.position.x / self.resolution) + self.map_origin_x)
-        map_pos_in_array_y = floor((point.pose.position.y / self.resolution) + self.map_origin_y)
+        map_pos_in_array_x = floor((point_x / self.resolution) + self.map_origin_x)
+        map_pos_in_array_y = floor((point_y / self.resolution) + self.map_origin_y)
         norm_map_pos_in_array_x = int(round(map_pos_in_array_x + self.map_height/2))
         norm_map_pos_in_array_y = int(round(map_pos_in_array_y + self.map_width/2))
         return [norm_map_pos_in_array_x, norm_map_pos_in_array_y]
