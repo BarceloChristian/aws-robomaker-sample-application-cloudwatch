@@ -6,7 +6,7 @@ Floor coverage test to be used within AWS RoboMaker
 
 import unittest
 import time
-from math import hypot, degrees, floor
+from math import floor, cos, sin
 from PIL import Image, ImageDraw
 
 import rospy
@@ -14,11 +14,9 @@ import rostest
 import tf
 import numpy as np
 
-from std_msgs.msg import Bool
-from geometry_msgs.msg import PoseStamped, PolygonStamped, Point32
+from geometry_msgs.msg import PoseStamped
 from rosgraph_msgs.msg import Clock
 from nav_msgs.msg import Odometry, OccupancyGrid
-from std_srvs.srv import Trigger, TriggerRequest
 
 from robomaker_simulation_msgs.msg import Tag
 from robomaker_simulation_msgs.srv import Cancel, AddTags
@@ -31,10 +29,9 @@ class CoverageTest(unittest.TestCase):
 
     TEST_NAME = "Coverage_Test"
 
-    #Here or via param/user input?
-    COVERED_PGM_VALUE = 100   # Wall value in pgm map.
-    FREE_PGM_VALUE = 0 # Free known value in pgm map.
-    UNKNOWN_PGM_VALUE = -1 #Unkown value in pgm map.
+    BLOCKED_PGM_VALUE = 100     # Wall value in pgm map.
+    FREE_PGM_VALUE = 0          # Free known value in pgm map.
+    UNKNOWN_PGM_VALUE = -1      # Unkown value in pgm map.
 
     def setUp(self):
         """
@@ -50,8 +47,8 @@ class CoverageTest(unittest.TestCase):
         self.tl = tf.TransformListener()
         self.get_params()
         self.get_map()
-        self.footprint_in_map_frame = self.transform_footprint_to_map_frame()
-        self.painting_map = self.map_array
+        self.painting_image = Image.fromarray(self.map_array.astype(np.uint8))
+        self.map_free_spaces = len([px for px in list(self.painting_image.getdata()) if px == 255])
 
     def runTest(self):
         """
@@ -72,58 +69,111 @@ class CoverageTest(unittest.TestCase):
 
     def odom_cb(self, msg):
         if not self.is_cancelled:
+            # Odom frame to Map frame.
+            pose_in_map_frame = self.odom_frame_to_map_frame(msg)
 
-            # Convert Points in footprint from /base_footprint frame to /odom frame and add robot position (which
-            # comes from /odom topic)
-            # I now have footprint points in /odom frame. Convert to /map frame.
-            # Get the indexes of the map array of said converted points
-            # Use image.draw to draw. Rotation not included as of now
+            # Get Odom msg in map frame current yaw angle, use that to rotate the footprint.
+            yaw_angle = self.get_yaw_angle(pose_in_map_frame)
+            rotated_footprint = self.rotate_footprint(yaw_angle)
 
-            #map_array_index = self.odom_to_map_array(msg)
-            #if self.map_array[map_array_index[0]][map_array_index[1]] != self.COVERED_PGM_VALUE:
-            #   self.painting_map[map_array_index[0]][map_array_index[1]] = self.COVERED_PGM_VALUE
+            # Add the footprint to the Odom message.
+            footprint_array = self.create_footprint_array(pose_in_map_frame, rotated_footprint)
+
+            # Get the map array indexes corresponding to the footprint points
+            footprint_map_indexes = self.get_map_indexes(footprint_array)
+
+            # Paint the map
+            draw = ImageDraw.Draw(self.painting_image)
+            draw.polygon(footprint_map_indexes, fill=0)
+
+            self.painting_image.save("/home/aws-cloudwatch/simulation_ws/test.pgm")
 
             current_percentage_covered = self.calculate_current_percentage_covered()
+
             if current_percentage_covered >= self.coverage_threshold:
                 rospy.loginfo("%s passed", self.test_name)
                 self.set_tag(
                     name=self.test_name + "_Status", value="Passed")
                 self.cancel_job()
 
-    #def odom_to_map_array(self, position):
-    #    """
-    #    Converts an Odometry message in odom frame to map frame and returns the [x,y] indexes of its
-    #    position in the map array.
-    #    """
-    #    # Getting an extrapolation error, even when asking if it canTransform
-    #    if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time(0)) and not self.is_cancelled:
-    #        point_in_odom_frame = self.odometry_to_pose_stamped(position)
-    #        point_in_map_frame = self.tl.transformPose(self.map_topic, point_in_odom_frame)
-    #        return self.point_to_map_array(point_in_map_frame.pose.position.x,
-    #                                       point_in_map_frame.pose.position.y)
+    def create_footprint_array(self, pose_in_map_frame, rotated_footprint):
+        """
+        Given a PoseStamped position in the map frame and the rotated footprint, it creates an array of
+        x,y points made by adding the footprint to the position.
+        """
+        footprint_array = []
+        for point in rotated_footprint:
+            footprint_array.append((pose_in_map_frame.pose.position.x + point[0],
+                                    pose_in_map_frame.pose.position.y + point[1]))
+        return footprint_array
 
-    def point_to_map_array(self, point_x, point_y):
+    def get_yaw_angle(self,msg):
+        """
+        Given a PosedStamped msg this function gets the yaw angle from it.
+        """
+        quaternion = (
+                      msg.pose.orientation.x,
+                      msg.pose.orientation.y,
+                      msg.pose.orientation.z,
+                      msg.pose.orientation.w)
+        euler = tf.transformations.euler_from_quaternion(quaternion)
+        return euler[2]
+
+    def rotate_footprint(self, yaw_angle):
+        """
+        Rotates the footprint points given an angle in radians.
+        """
+        rotated_footprint = []
+        c = cos(yaw_angle)
+        s= sin(yaw_angle)
+        for point in self.footprint:
+            rotated_footprint.append((point[0]*c - point[1]*s,
+                                      point[0]*s + point[1]*c ))
+        return rotated_footprint
+
+    def odom_frame_to_map_frame(self, msg):
+        """
+        Converts an Odometry message in odom frame to map frame.
+        """
+        point_in_odom_frame = self.odometry_to_pose_stamped(msg)
+        #self.tl.waitForTransform(self.map_topic, self.odom_topic, rospy.Time.now(), rospy.Duration(20))
+        point_in_map_frame = self.tl.transformPose(self.map_topic, point_in_odom_frame)
+        return point_in_map_frame
+
+    def odometry_to_pose_stamped(self, msg):
+        """
+        Creates a PoseStamped message from an Odometry message.
+        """
+        pose_in_odom = PoseStamped()
+        pose_in_odom.header = msg.header
+        pose_in_odom.pose = msg.pose.pose
+        return pose_in_odom
+
+    def get_map_indexes(self, odom_footprint_array):
+        """
+        Given an array of x,y points this function gets the indexes of said points from the map.
+        """
+        odom_footprint_map_indexes = []
+        for point in odom_footprint_array:
+            odom_footprint_map_indexes.append(self.point_to_map_array(point))
+        return odom_footprint_map_indexes
+
+    def point_to_map_array(self, point):
         """
         Given a point in map frame it returns the [x,y] indexes of it in the map array.
         """
-        map_pos_in_array_x = floor((point_x / self.resolution) + self.map_origin_x)
-        map_pos_in_array_y = floor((point_y / self.resolution) + self.map_origin_y)
+        map_pos_in_array_x = floor((point[0] / self.resolution) + self.map_origin_x)
+        map_pos_in_array_y = floor((point[1] / self.resolution) + self.map_origin_y)
         norm_map_pos_in_array_x = int(round(map_pos_in_array_x + self.map_height/2))
         norm_map_pos_in_array_y = int(round(map_pos_in_array_y + self.map_width/2))
-        return [norm_map_pos_in_array_x, norm_map_pos_in_array_y]
-
-    #def odometry_to_pose_stamped(self, msg):
-    #    """
-    #    Creates a PoseStamped message from an Odometry message.
-    #    """
-    #    pose_in_odom = PoseStamped()
-    #    pose_in_odom.header = msg.header
-    #    pose_in_odom.pose = msg.pose.pose
-    #    return pose_in_odom
+        return (norm_map_pos_in_array_x, norm_map_pos_in_array_y)
 
     def calculate_current_percentage_covered(self):
-        free_painting_map_spaces = np.count_nonzero(self.painting_map == self.FREE_PGM_VALUE)
-        return float(( (self.map_free_spaces - free_painting_map_spaces) / self.map_free_spaces ) * 100)
+        """
+        Calculates the percentage of originally free spaces and the free spaces in the map being painted.
+        """
+        free_painting_map_spaces = len([px for px in list(self.painting_image.getdata()) if px == 255])
+        return float(( float(self.map_free_spaces - free_painting_map_spaces) / self.map_free_spaces ) * 100)
 
     def timeout_cb(self, msg):
         """
@@ -198,12 +248,12 @@ class CoverageTest(unittest.TestCase):
             raw_map = rospy.wait_for_message(self.map_topic, OccupancyGrid, timeout=5)
             self.map_array = np.array(raw_map.data)
             self.map_array = np.reshape(self.map_array, (raw_map.info.height, raw_map.info.width))
+            self.format_map_colors()
             self.map_height = raw_map.info.height
             self.map_width = raw_map.info.width
             self.resolution = raw_map.info.resolution
             self.map_origin_x = raw_map.info.origin.position.x
             self.map_origin_y = raw_map.info.origin.position.y
-            self.map_free_spaces = np.count_nonzero(self.map_array == self.FREE_PGM_VALUE)
         except Exception as e:
             rospy.logerr("Error %s", e)
             self.set_tag(name=self.test_name, value="Failed")
@@ -215,20 +265,23 @@ class CoverageTest(unittest.TestCase):
         """
         return rospy.Time.now().secs
 
+    def format_map_colors(self):
+        """
+        Formats the map array with the correct values for the PIL module.
+        """
+        self.map_array[self.map_array == self.UNKNOWN_PGM_VALUE] = 150
+        self.map_array[self.map_array == self.FREE_PGM_VALUE] = 255
+        self.map_array[self.map_array == self.BLOCKED_PGM_VALUE] = 0
+
     def process_footprint(self, footprint_dict):
+        """
+        Generates an array of x,y points from the read footprint.yaml file
+        """
         footprint_array = []
         for point in footprint_dict:
             pair = (point["x"], point["y"])
             footprint_array.append(pair)
         return footprint_array
-
-    def transform_footprint_to_map_frame(self):
-        return
-
-    def print_map(self, map_array):
-        map_array = map_array.astype(np.uint8)
-        im = Image.fromarray(map_array)
-        im.show()
 
 if __name__ == "__main__":
     rospy.init_node("coverage_test", log_level=rospy.INFO)

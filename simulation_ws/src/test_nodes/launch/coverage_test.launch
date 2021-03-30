@@ -4,7 +4,7 @@
 
     <!-- Thresholds for the coverage test (%).
          E.g. coverage_threshold=80.0 means 80% of the floor needs to be covered for the test to pass. -->
-    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 80.0)" />
+    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 1.0)" />
 
     <!-- Time until simulation timeouts (s) -->
     <param name="sim_timeout" type="int" value="$(optenv SIM_TIMEOUT_SECONDS 500)" />
