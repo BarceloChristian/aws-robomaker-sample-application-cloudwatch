@@ -21,7 +21,6 @@ from nav_msgs.msg import Odometry, OccupancyGrid
 from robomaker_simulation_msgs.msg import Tag
 from robomaker_simulation_msgs.srv import Cancel, AddTags
 
-
 class CoverageTest(unittest.TestCase):
     """
     Integration coverage test
@@ -42,7 +41,6 @@ class CoverageTest(unittest.TestCase):
         while self.get_time() == 0:
             pass
         self.sim_start_time_secs = self.get_time()
-        self.coverage_start_time = self.get_time()  # For later usage, now it does the same as sim time
         self.percentage_covered = 0
         self.tl = tf.TransformListener()
         self.get_params()
@@ -136,7 +134,8 @@ class CoverageTest(unittest.TestCase):
         Converts an Odometry message in odom frame to map frame.
         """
         point_in_odom_frame = self.odometry_to_pose_stamped(msg)
-        #self.tl.waitForTransform(self.map_topic, self.odom_topic, rospy.Time.now(), rospy.Duration(20))
+        #if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time()):
+        self.tl.waitForTransform(self.map_topic, self.odom_topic, rospy.Time(), rospy.Duration(300))
         point_in_map_frame = self.tl.transformPose(self.map_topic, point_in_odom_frame)
         return point_in_map_frame
 
@@ -177,16 +176,10 @@ class CoverageTest(unittest.TestCase):
 
     def timeout_cb(self, msg):
         """
-        Cancel the test if the simulation or the coverage process time out
+        Cancel the test if the simulation times out
         Timeouts are based on simulation time, published on /clock topic
         """
-        if (msg.clock.secs - self.coverage_start_time) > self.coverage_timeout and \
-                not self.is_cancelled:
-            rospy.loginfo("Coverage test timed out, cancelling job")
-            self.set_tag(name=self.test_name + "_Status", value="Failed")
-            self.set_tag(name="Coverage_Timed_Out", value=str(True))
-            self.cancel_job()
-        elif (msg.clock.secs - self.sim_start_time_secs) > self.sim_timeout and \
+        if (msg.clock.secs - self.sim_start_time_secs) > self.sim_timeout and \
                 not self.is_cancelled:
             rospy.loginfo("Test timed out, cancelling job")
             self.set_tag(name=self.test_name + "_Status", value="Failed")
@@ -235,7 +228,6 @@ class CoverageTest(unittest.TestCase):
         """
         self.coverage_threshold = rospy.get_param("coverage_threshold")
         self.sim_timeout = rospy.get_param("sim_timeout")
-        self.coverage_timeout = rospy.get_param("coverage_timeout")
         self.map_topic = rospy.get_param("map_topic")
         self.odom_topic = rospy.get_param("odom_topic")
         self.footprint = self.process_footprint(rospy.get_param("/footprint"))
