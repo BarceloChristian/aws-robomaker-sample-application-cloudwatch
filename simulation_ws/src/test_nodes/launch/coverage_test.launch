@@ -4,25 +4,29 @@
 
     <!-- Thresholds for the coverage test (%).
          E.g. coverage_threshold=80.0 means 80% of the floor needs to be covered for the test to pass. -->
-    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 2.0)" />
+    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 1.0)" />
 
     <!-- Time until simulation timeouts (s) -->
     <param name="sim_timeout" type="int" value="$(optenv SIM_TIMEOUT_SECONDS 500)" />
 
-    <!-- Time until coverage test timeout (s). Greater than simulation time. -->
-    <param name="coverage_timeout" type="int" value="$(optenv COVERAGE_TIMEOUT 500)" />
+    <param name="use_map_topic" type="bool" value="$(optenv USE_MAP_TOPIC True)" />
+    <param name="load_map_file" type="bool" value="$(optenv USE_MAP_TOPIC False)" />
 
     <!-- Odometry topic from where the test listens to the robot position. -->
     <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
 
-    <!-- Name of the frame of the map. -->
-    <param name="map_frame_name" type="str" value="$(optenv MAP_FRAME_NAME map)"/>
+    <!-- Folder path where to save image of the robot route -->
+    <param name="output_image_path" type="str" value="$(optenv OUTPUT_IMAGE_PATH /home/aws-cloudwatch/simulation_ws/test.pgm)" />
+
+    <!--<param name="map_config_path" type="str" value="$(find aws_robomaker_small_house_world)/maps/turtlebot3_waffle_pi/map.yaml"/> -->
+    <!-- Path where the map and map configuration are located. Must be set if not using the map topic -->
+    <!--<param name="map_config_path" type="str" value="$(optenv MAP_CONFIG_PATH $(find aws_robomaker_small_house_world)/maps/turtlebot3_waffle_pi/map.yaml)" />-->
+
+    <!-- Path for testing purposes:
+    $(find aws_robomaker_small_house_world)/maps/turtlebot3_waffle_pi/map.yaml -->
 
     <!-- Robot footprint. -->
     <rosparam file="$(find test_nodes)/robot_footprint/footprint.yaml" command="load" />
-
-    <!-- Map.yaml configuration file path. -->
-    <param name="map_path" type="str" value="$(find aws_robomaker_small_house_world)/maps/turtlebot3_waffle_pi/map.yaml"/>
 
     <node pkg="test_nodes" type="coverage_test.py" name="coverage_test" output="screen"/>
 </launch>
