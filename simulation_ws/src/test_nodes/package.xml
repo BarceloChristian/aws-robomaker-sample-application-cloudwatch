@@ -14,4 +14,6 @@
   <depend>rosgraph_msgs</depend>
   <depend>aws_robomaker_simulation_ros_pkgs</depend>
   <depend>ros_monitoring_msgs</depend>
+  <depend>python-numpy</depend>
+  <depend>gazebo_ros</depend>
 </package>

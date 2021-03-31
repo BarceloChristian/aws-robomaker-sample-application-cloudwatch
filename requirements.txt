@@ -1,0 +1,3 @@
+imagemagick
+PIL
+pyyaml
