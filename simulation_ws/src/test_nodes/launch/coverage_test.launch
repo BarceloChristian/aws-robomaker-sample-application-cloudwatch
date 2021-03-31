@@ -4,18 +4,18 @@
 
     <!-- Thresholds for the coverage test (%).
          E.g. coverage_threshold=80.0 means 80% of the floor needs to be covered for the test to pass. -->
-    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 1.0)" />
+    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 90.0)" />
 
     <!-- Time until simulation timeouts (s) -->
     <param name="sim_timeout" type="int" value="$(optenv SIM_TIMEOUT_SECONDS 500)" />
 
-    <!-- Time until coverage test timeout (s). Greater than simulation time. -->
-    <param name="coverage_timeout" type="int" value="$(optenv COVERAGE_TIMEOUT 500)" />
-
-    <param name="map_topic" type="str" value="$(optenv MAP_TOPIC /map)" />
+    <param name="use_map_topic" type="bool" value="$(optenv USE_MAP_TOPIC True)" />
 
     <!-- Odometry topic from where the test listens to the robot position. -->
     <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
+
+    <!-- Folder path where to save image of the robot route -->
+    <param name="image_path" type="str" value="$(optenv IMAGE_PATH "")"/>
 
     <!-- Robot footprint. -->
     <rosparam file="$(find test_nodes)/robot_footprint/footprint.yaml" command="load" />

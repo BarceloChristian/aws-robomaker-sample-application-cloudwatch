@@ -1,4 +1,6 @@
-footprint:
+footprint_type: "polygon" # polygon | circular
+# radius: 0.185 # footprint radius in meters, only if type circular
+polygon: # Ordered points defining the footprint polygon
     -
         x: -0.205
         y: -0.155
