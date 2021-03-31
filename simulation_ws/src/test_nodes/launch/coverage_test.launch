@@ -4,7 +4,7 @@
 
     <!-- Thresholds for the coverage test (%).
          E.g. coverage_threshold=80.0 means 80% of the floor needs to be covered for the test to pass. -->
-    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 1.0)" />
+    <param name="coverage_threshold" type="double" value="$(optenv COVERAGE_THRESHOLD 2.0)" />
 
     <!-- Time until simulation timeouts (s) -->
     <param name="sim_timeout" type="int" value="$(optenv SIM_TIMEOUT_SECONDS 500)" />
@@ -12,13 +12,17 @@
     <!-- Time until coverage test timeout (s). Greater than simulation time. -->
     <param name="coverage_timeout" type="int" value="$(optenv COVERAGE_TIMEOUT 500)" />
 
-    <param name="map_topic" type="str" value="$(optenv MAP_TOPIC /map)" />
-
     <!-- Odometry topic from where the test listens to the robot position. -->
     <param name="odom_topic" type="str" value="$(optenv ODOM_TOPIC /odom)" />
 
+    <!-- Name of the frame of the map. -->
+    <param name="map_frame_name" type="str" value="$(optenv MAP_FRAME_NAME map)"/>
+
     <!-- Robot footprint. -->
     <rosparam file="$(find test_nodes)/robot_footprint/footprint.yaml" command="load" />
+
+    <!-- Map.yaml configuration file path. -->
+    <param name="map_path" type="str" value="$(find aws_robomaker_small_house_world)/maps/turtlebot3_waffle_pi/map.yaml"/>
 
     <node pkg="test_nodes" type="coverage_test.py" name="coverage_test" output="screen"/>
 </launch>

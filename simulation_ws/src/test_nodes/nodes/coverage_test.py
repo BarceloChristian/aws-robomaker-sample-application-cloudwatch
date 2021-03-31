@@ -7,12 +7,14 @@ Floor coverage test to be used within AWS RoboMaker
 import unittest
 import time
 from math import floor, cos, sin
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps
+from os import path
 
 import rospy
 import rostest
 import tf
 import numpy as np
+import yaml
 
 from geometry_msgs.msg import PoseStamped
 from rosgraph_msgs.msg import Clock
@@ -28,9 +30,9 @@ class CoverageTest(unittest.TestCase):
 
     TEST_NAME = "Coverage_Test"
 
-    BLOCKED_PGM_VALUE = 100     # Wall value in pgm map.
-    FREE_PGM_VALUE = 0          # Free known value in pgm map.
-    UNKNOWN_PGM_VALUE = -1      # Unkown value in pgm map.
+    BLOCKED_PGM_VALUE = 0      # Wall value in pgm map.
+    FREE_PGM_VALUE = 254       # Free known value in pgm map.
+    UNKNOWN_PGM_VALUE = 150    # Unkown value in pgm map.
 
     def setUp(self):
         """
@@ -45,8 +47,6 @@ class CoverageTest(unittest.TestCase):
         self.tl = tf.TransformListener()
         self.get_params()
         self.get_map()
-        self.painting_image = Image.fromarray(self.map_array.astype(np.uint8))
-        self.map_free_spaces = len([px for px in list(self.painting_image.getdata()) if px == 255])
 
     def runTest(self):
         """
@@ -84,12 +84,12 @@ class CoverageTest(unittest.TestCase):
             draw = ImageDraw.Draw(self.painting_image)
             draw.polygon(footprint_map_indexes, fill=0)
 
-            self.painting_image.save("/home/aws-cloudwatch/simulation_ws/test.pgm")
-
             current_percentage_covered = self.calculate_current_percentage_covered()
+            rospy.loginfo(current_percentage_covered)
 
             if current_percentage_covered >= self.coverage_threshold:
                 rospy.loginfo("%s passed", self.test_name)
+                ImageOps.flip(self.painting_image).save("/home/aws-cloudwatch/simulation_ws/test.pgm")
                 self.set_tag(
                     name=self.test_name + "_Status", value="Passed")
                 self.cancel_job()
@@ -134,9 +134,9 @@ class CoverageTest(unittest.TestCase):
         Converts an Odometry message in odom frame to map frame.
         """
         point_in_odom_frame = self.odometry_to_pose_stamped(msg)
-        #if self.tl.canTransform(self.map_topic, self.odom_topic, rospy.Time()):
-        self.tl.waitForTransform(self.map_topic, self.odom_topic, rospy.Time(), rospy.Duration(300))
-        point_in_map_frame = self.tl.transformPose(self.map_topic, point_in_odom_frame)
+        #if self.tl.canTransform(self.map_frame_name, self.odom_topic, rospy.Time()):
+        self.tl.waitForTransform(self.map_frame_name, self.odom_topic, rospy.Time(), rospy.Duration(300))
+        point_in_map_frame = self.tl.transformPose(self.map_frame_name, point_in_odom_frame)
         return point_in_map_frame
 
     def odometry_to_pose_stamped(self, msg):
@@ -171,7 +171,7 @@ class CoverageTest(unittest.TestCase):
         """
         Calculates the percentage of originally free spaces and the free spaces in the map being painted.
         """
-        free_painting_map_spaces = len([px for px in list(self.painting_image.getdata()) if px == 255])
+        free_painting_map_spaces = len([px for px in list(self.painting_image.getdata()) if px == self.FREE_PGM_VALUE])
         return float(( float(self.map_free_spaces - free_painting_map_spaces) / self.map_free_spaces ) * 100)
 
     def timeout_cb(self, msg):
@@ -228,28 +228,27 @@ class CoverageTest(unittest.TestCase):
         """
         self.coverage_threshold = rospy.get_param("coverage_threshold")
         self.sim_timeout = rospy.get_param("sim_timeout")
-        self.map_topic = rospy.get_param("map_topic")
         self.odom_topic = rospy.get_param("odom_topic")
         self.footprint = self.process_footprint(rospy.get_param("/footprint"))
+        self.map_frame_name = rospy.get_param("map_frame_name")
 
     def get_map(self):
         """
-        Save the raw map and convert it to a numpy array. Saves useful data.
+        Reads map configuration from map server and loads map image.
         """
-        try:
-            raw_map = rospy.wait_for_message(self.map_topic, OccupancyGrid, timeout=5)
-            self.map_array = np.array(raw_map.data)
-            self.map_array = np.reshape(self.map_array, (raw_map.info.height, raw_map.info.width))
-            self.format_map_colors()
-            self.map_height = raw_map.info.height
-            self.map_width = raw_map.info.width
-            self.resolution = raw_map.info.resolution
-            self.map_origin_x = raw_map.info.origin.position.x
-            self.map_origin_y = raw_map.info.origin.position.y
-        except Exception as e:
-            rospy.logerr("Error %s", e)
-            self.set_tag(name=self.test_name, value="Failed")
-            self.cancel_job()
+        self.map_config_path = rospy.get_param("map_path")
+        with open(self.map_config_path, "r") as file:
+            self.map_config = yaml.load(file)
+        self.map_image_path = path.join( path.dirname(self.map_config_path),
+                                         self.map_config["image"])
+        self.map_image = Image.open(self.map_image_path)
+        self.map_width, self.map_height = self.map_image.size
+        self.resolution = self.map_config["resolution"]
+        self.map_origin_x = self.map_config["origin"][0]
+        self.map_origin_y = self.map_config["origin"][1]
+        self.format_map_colors()
+        self.painting_image = ImageOps.flip(self.map_image.copy())
+        self.map_free_spaces = len([px for px in list(self.painting_image.getdata()) if px == self.FREE_PGM_VALUE])
 
     def get_time(self):
         """
@@ -261,9 +260,11 @@ class CoverageTest(unittest.TestCase):
         """
         Formats the map array with the correct values for the PIL module.
         """
-        self.map_array[self.map_array == self.UNKNOWN_PGM_VALUE] = 150
-        self.map_array[self.map_array == self.FREE_PGM_VALUE] = 255
-        self.map_array[self.map_array == self.BLOCKED_PGM_VALUE] = 0
+        image_array = np.array(self.map_image)
+        image_array[image_array == 205] = self.UNKNOWN_PGM_VALUE
+        image_array[image_array == 254] = self.FREE_PGM_VALUE
+        image_array[image_array == 0] = self.BLOCKED_PGM_VALUE
+        self.map_image = Image.fromarray(image_array)
 
     def process_footprint(self, footprint_dict):
         """
